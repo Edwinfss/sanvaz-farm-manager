@@ -3,160 +3,330 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-<title>Granja Idle</title>
+<title>Granja Idle RPG</title>
 <style>
-:root{--bg:#1f3a2a;--card:#2d5239;--acc:#f2c94c;--txt:#f4f1de;--dim:#a9c4b0}
+:root{--bg:#1f3a2a;--card:#2d5239;--acc:#f2c94c;--txt:#f4f1de;--dim:#a9c4b0;--blue:#5b8def;--red:#e5534b}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;max-width:480px;margin:auto;padding:12px}
-h1{font-size:20px;margin:0}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-.coins{font-size:22px;color:var(--acc);font-weight:700}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;max-width:480px;margin:auto;padding:12px 12px 80px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+h1{font-size:18px;margin:0}
+.coins{font-size:20px;color:var(--acc);font-weight:700}
 .sub{font-size:12px;color:var(--dim)}
+.xpbar{height:8px;background:#0005;border-radius:4px;overflow:hidden;margin:4px 0 10px}
+.xpbar i{display:block;height:100%;background:var(--blue)}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
-.plot{background:var(--card);border-radius:10px;padding:8px;text-align:center;min-height:96px;cursor:pointer;position:relative;user-select:none}
-.plot.locked{opacity:.6}
-.plot .emo{font-size:30px}
+.plot{background:var(--card);border-radius:10px;padding:8px;text-align:center;min-height:96px;cursor:pointer;user-select:none}
+.plot.locked{opacity:.6}.plot .emo{font-size:30px}
+.plot.ready{outline:2px solid var(--acc)}
 .bar{height:6px;background:#0004;border-radius:3px;overflow:hidden;margin-top:6px}
 .bar i{display:block;height:100%;background:var(--acc);width:0}
-.plot.ready{outline:2px solid var(--acc)}
-h2{font-size:14px;margin:12px 0 6px;color:var(--dim);text-transform:uppercase}
+h2{font-size:13px;margin:14px 0 6px;color:var(--dim);text-transform:uppercase}
 .row{display:flex;justify-content:space-between;align-items:center;background:var(--card);border-radius:10px;padding:10px;margin-bottom:6px;gap:8px}
-.row b{display:block}
+.row b{display:block}.row>div:first-child{flex:1}
+.q{background:var(--card);border-radius:10px;padding:10px;margin-bottom:8px}
+.q .npc{font-size:26px;margin-right:8px}.q .head{display:flex;align-items:center;margin-bottom:4px}
+.q .txt{font-size:13px;color:var(--dim);font-style:italic;margin:4px 0}
+.q .btns{display:flex;gap:6px;margin-top:6px}
+.q.done{opacity:.5}
 button{background:var(--acc);color:#222;border:0;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer}
 button:disabled{background:#556;color:#999;cursor:not-allowed}
-button.alt{background:#5b8def;color:#fff}
-.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#000c;padding:10px 16px;border-radius:20px;opacity:0;transition:.3s;pointer-events:none}
+button.alt{background:var(--blue);color:#fff}
+nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;display:flex;background:#12261a;border-top:1px solid #0008}
+nav div{flex:1;text-align:center;padding:10px 0;font-size:12px;cursor:pointer;color:var(--dim);position:relative}
+nav div.on{color:var(--acc);font-weight:700}nav div span{display:block;font-size:20px}
+.badge{position:absolute;top:4px;right:22%;background:var(--red);color:#fff;border-radius:9px;font-size:10px;padding:1px 6px}
+.toast{position:fixed;left:50%;bottom:76px;transform:translateX(-50%);background:#000d;padding:10px 16px;border-radius:20px;opacity:0;transition:.3s;pointer-events:none;text-align:center;max-width:90%}
 .toast.on{opacity:1}
 </style>
 </head>
 <body>
 <header>
-  <div><h1>🌾 Granja Idle</h1><div class="sub" id="rate"></div></div>
-  <div class="coins" id="coins">0</div>
+  <div><h1>🌾 Granja Idle RPG</h1><div class="sub" id="rate"></div></div>
+  <div class="coins" id="coins"></div>
 </header>
-
-<div class="grid" id="plots"></div>
-
-<h2>Cultivos</h2><div id="crops"></div>
-<h2>Mejoras</h2><div id="ups"></div>
-<h2>Extras</h2>
-<div class="row">
-  <div><b>📺 Bono x2 (2 min)</b><span class="sub">Mira un anuncio (simulado)</span></div>
-  <button class="alt" id="adBtn">Ver</button>
-</div>
-<div class="row">
-  <div><b>🏆 Prestigio</b><span class="sub" id="presInfo"></span></div>
-  <button id="presBtn">Reiniciar</button>
-</div>
+<div class="sub" id="lvl"></div>
+<div class="xpbar"><i id="xpfill"></i></div>
+<main id="main"></main>
+<nav id="nav"></nav>
 <div class="toast" id="toast"></div>
 
 <script>
-// ---------- Datos ----------
+// ================= DATOS =================
 const CROPS=[
-  {id:'trigo',  n:'Trigo',   e:'🌾',time:3,  gain:5,   cost:0},
-  {id:'zanah',  n:'Zanahoria',e:'🥕',time:6,  gain:14,  cost:150},
-  {id:'maiz',   n:'Maíz',    e:'🌽',time:12, gain:36,  cost:1200},
-  {id:'tomate', n:'Tomate',  e:'🍅',time:25, gain:100, cost:9000},
-  {id:'calab',  n:'Calabaza',e:'🎃',time:60, gain:320, cost:70000},
+  {id:'trigo', n:'Trigo',    e:'🌾',time:3, gain:5,  cost:0,     lv:1},
+  {id:'zanah', n:'Zanahoria',e:'🥕',time:6, gain:14, cost:150,   lv:2},
+  {id:'maiz',  n:'Maíz',     e:'🌽',time:12,gain:36, cost:1200,  lv:4},
+  {id:'tomate',n:'Tomate',   e:'🍅',time:25,gain:100,cost:9000,  lv:7},
+  {id:'calab', n:'Calabaza', e:'🎃',time:60,gain:320,cost:70000, lv:10},
 ];
 const UPS=[
-  {id:'speed', n:'Riego automático', d:'+15% velocidad',   base:100, mult:1.6},
-  {id:'yield', n:'Fertilizante',     d:'+20% ganancia',    base:150, mult:1.7},
-  {id:'auto',  n:'Granjero',         d:'Cosecha y replanta solo (nivel = % de plots)', base:400, mult:2.2, max:5},
+  {id:'speed',n:'Riego automático',d:'+15% velocidad de cultivo',base:100,mult:1.6},
+  {id:'yield',n:'Fertilizante',    d:'+20% cosecha',             base:150,mult:1.7},
+  {id:'auto', n:'Granjeros',       d:'Cada nivel automatiza 20% de las parcelas',base:400,mult:2.2,max:5},
+];
+const SKILLS=[
+  {id:'verde', n:'🌱 Manos verdes',   d:'+10% cosecha por nivel',    max:10},
+  {id:'rapid', n:'⚡ Semillas rápidas',d:'+8% velocidad por nivel',   max:10},
+  {id:'regat', n:'💰 Regateo',        d:'+10% precio de venta',      max:10},
+  {id:'estud', n:'📖 Estudioso',      d:'+10% experiencia',          max:10},
+  {id:'off',   n:'🌙 Descanso',       d:'+10% ganancia offline (base 50%)',max:5},
+  {id:'cart',  n:'🛒 Carreta',        d:'Vende solo cada 30 s (guarda lo de misiones)',max:1},
+];
+const NPC={rosa:{n:'Abuela Rosa',e:'👵'},tomas:{n:'Tomás el Mercader',e:'🧔'},alc:{n:'Alcaldesa Vaz',e:'👩‍⚖️'}};
+// Historia principal: se desbloquea en orden (after)
+const STORY=[
+ {id:'s1',npc:'rosa',t:'Primeras semillas',txt:'Esta granja fue de tu abuelo. Empieza con lo básico: cosecha algo de trigo.',g:{type:'harvest',crop:'trigo',n:10},r:{coins:30,xp:20}},
+ {id:'s2',npc:'tomas',t:'Al mercado',txt:'Traigo pan al pueblo y me falta harina. ¿Me vendes 15 de trigo?',after:'s1',g:{type:'deliver',crop:'trigo',n:15},r:{coins:80,xp:35}},
+ {id:'s3',npc:'rosa',t:'Más tierra',txt:'Con tres parcelas no llegas lejos. Compra una más.',after:'s2',g:{type:'plots',n:4},r:{coins:150,xp:50}},
+ {id:'s4',npc:'tomas',t:'Nuevos sabores',txt:'La gente pide zanahorias. Desbloquéalas (nivel 2).',after:'s3',g:{type:'own',crop:'zanah'},r:{coins:100,xp:60,pts:1}},
+ {id:'s5',npc:'rosa',t:'Sopa de invierno',txt:'Necesito 20 zanahorias para mi sopa famosa.',after:'s4',g:{type:'deliver',crop:'zanah',n:20},r:{coins:300,xp:90}},
+ {id:'s6',npc:'alc',t:'Un granjero de confianza',txt:'El pueblo necesita más comida. Contrata a tu primer granjero.',after:'s5',g:{type:'up',id:'auto',n:1},r:{coins:500,xp:120,pts:1}},
+ {id:'s7',npc:'alc',t:'Héroe local',txt:'Demuestra tu valía: llega al nivel 6.',after:'s6',g:{type:'level',n:6},r:{coins:800,xp:0,pts:2}},
+ {id:'s8',npc:'tomas',t:'Pedido grande',txt:'Un barco llega con hambre: 40 de maíz, por favor.',after:'s7',g:{type:'deliver',crop:'maiz',n:40},r:{coins:3000,xp:250}},
+ {id:'s9',npc:'rosa',t:'Rojo tomate',txt:'Cosecha 40 tomates y te enseñaré mi receta secreta.',after:'s8',g:{type:'harvest',crop:'tomate',n:40},r:{coins:9000,xp:500,pts:2}},
+ {id:'s10',npc:'alc',t:'Festival de la cosecha',txt:'¡El gran festival! Necesito 25 calabazas para la plaza.',after:'s9',g:{type:'deliver',crop:'calab',n:25},r:{coins:50000,xp:1500,pts:3,stars:2}},
+ {id:'s11',npc:'alc',t:'Leyenda del valle',txt:'Gana 500.000 monedas vendiendo cosechas. Te nombraré Leyenda.',after:'s10',g:{type:'earn',n:500000},r:{coins:0,xp:5000,pts:5,stars:5}},
 ];
 const PLOT_COST=n=>Math.floor(250*Math.pow(2.4,n-3));
-const MAX_PLOTS=9;
-const SAVE='granjaIdle.v1';
+const MAX_PLOTS=9, SAVE='granjaRPG.v1';
+const needXp=l=>Math.round(30*Math.pow(l,1.6));
 
-// ---------- Estado ----------
-const fresh=()=>({coins:0,crops:{trigo:1},ups:{},plots:[{c:'trigo',t:0},{c:'trigo',t:0},{c:'trigo',t:0}],
-  stars:0,bonusUntil:0,last:Date.now()});
+// ================= ESTADO =================
+const fresh=()=>({coins:0,xp:0,lvl:1,pts:0,skills:{},inv:{},stats:{earned:0},crops:{trigo:1},sel:'trigo',ups:{},
+  plots:[{c:'trigo',t:0},{c:'trigo',t:0},{c:'trigo',t:0}],stars:0,runEarned:0,bonusUntil:0,
+  qdone:{},qbase:{},daily:{day:'',list:[]},last:Date.now()});
 let S=load();
 function load(){try{const s=JSON.parse(localStorage.getItem(SAVE));if(s)return Object.assign(fresh(),s)}catch(e){}return fresh()}
 function save(){S.last=Date.now();try{localStorage.setItem(SAVE,JSON.stringify(S))}catch(e){}}
 
-// ---------- Cálculos ----------
-const lvl=id=>S.ups[id]||0;
-const starMult=()=>1+S.stars*0.1;
-const bonus=()=>Date.now()<S.bonusUntil?2:1;
-const speed=()=>Math.pow(1.15,lvl('speed'));
-const yieldM=()=>Math.pow(1.2,lvl('yield'))*starMult()*bonus();
-const upCost=u=>Math.floor(u.base*Math.pow(u.mult,lvl(u.id)));
+// ================= CÁLCULOS =================
+const lv=id=>S.ups[id]||0, sk=id=>S.skills[id]||0;
 const cropOf=id=>CROPS.find(c=>c.id===id);
-function autoCount(){return Math.min(S.plots.length,Math.ceil(S.plots.length*lvl('auto')/5))}
-function perSec(){let t=0;S.plots.forEach((p,i)=>{if(i<autoCount()){const c=cropOf(p.c);t+=c.gain*yieldM()/(c.time/speed())}});return t}
+const bonus=()=>Date.now()<S.bonusUntil?2:1;
+const speed=()=>Math.pow(1.15,lv('speed'))*(1+0.08*sk('rapid'));
+const qty=()=>Math.pow(1.2,lv('yield'))*(1+0.1*sk('verde'));
+const priceMult=()=>(1+0.1*sk('regat'))*(1+0.1*S.stars)*bonus();
+const upCost=u=>Math.floor(u.base*Math.pow(u.mult,lv(u.id)));
+const autoCount=()=>Math.min(S.plots.length,Math.ceil(S.plots.length*lv('auto')/5));
 const fmt=n=>n>=1e9?(n/1e9).toFixed(2)+'B':n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e4?(n/1e3).toFixed(1)+'K':Math.floor(n).toString();
+function perSec(){let t=0;for(let i=0;i<autoCount();i++){const c=cropOf(S.plots[i].c);t+=c.gain*priceMult()*qty()*speed()/c.time}return t}
 
-// ---------- Acciones ----------
-function harvest(p){const c=cropOf(p.c);S.coins+=c.gain*yieldM();p.t=0}
-function tapPlot(i){
-  const p=S.plots[i];if(!p)return;
-  const c=cropOf(p.c);
-  if(p.t>=c.time/speed()&&i>=autoCount())harvest(p);
-  else if(p.t===0){p.t=0.0001}
-  render();
+// ================= NÚCLEO RPG =================
+function addXP(x){
+  S.xp+=x*(1+0.1*sk('estud'));
+  while(S.xp>=needXp(S.lvl)){S.xp-=needXp(S.lvl);S.lvl++;S.pts++;toast('⬆️ ¡Nivel '+S.lvl+'! +1 punto de habilidad')}
 }
-function buyCrop(id){const c=cropOf(id);if(S.coins<c.cost||S.crops[id])return;S.coins-=c.cost;S.crops[id]=1;
-  S.plots.forEach(p=>{if(cropOf(p.c).gain<c.gain)p.c=id});toast('¡Desbloqueaste '+c.n+'!');render()}
-function buyUp(id){const u=UPS.find(x=>x.id===id);if(u.max&&lvl(id)>=u.max)return;const c=upCost(u);
-  if(S.coins<c)return;S.coins-=c;S.ups[id]=lvl(id)+1;render()}
-function buyPlot(){if(S.plots.length>=MAX_PLOTS)return;const c=PLOT_COST(S.plots.length);
-  if(S.coins<c)return;S.coins-=c;const best=CROPS.filter(x=>S.crops[x.id]).pop();S.plots.push({c:best.id,t:0});render()}
-function prestigeGain(){return Math.floor(Math.sqrt(S.coins/5000))}
-function prestige(){const g=prestigeGain();if(g<1)return toast('Necesitas ≥ 5.000 monedas');
-  if(!confirm('Reiniciar para ganar '+g+' ⭐ (+10% ganancia cada una)?'))return;
-  const stars=S.stars+g;S=fresh();S.stars=stars;save();render()}
-function watchAd(){
-  // TODO: reemplazar por SDK real (AdMob / Unity Ads / AdSense H5) con anuncio recompensado
-  toast('📺 Anuncio simulado... ¡x2 activado 2 min!');
-  S.bonusUntil=Math.max(Date.now(),S.bonusUntil)+120000;render()}
+function harvestUnits(id,mult=1){
+  const c=cropOf(id),q=qty()*mult;
+  S.inv[id]=(S.inv[id]||0)+q;S.stats[id]=(S.stats[id]||0)+q;
+  addXP(Math.max(1,c.gain*0.25)*q);
+}
+function sellCrop(id,reserve=0){
+  const n=Math.floor((S.inv[id]||0)-reserve);if(n<=0)return 0;
+  const v=n*cropOf(id).gain*priceMult();
+  S.inv[id]-=n;S.coins+=v;S.stats.earned+=v;S.runEarned+=v;return v;
+}
+function reserved(){ // unidades necesarias para misiones de entrega activas
+  const r={};
+  activeStory().concat(S.daily.list.filter(d=>!d.done)).forEach(q=>{
+    const g=q.g||q;if(g.type==='deliver')r[g.crop]=(r[g.crop]||0)+g.n});
+  return r;
+}
+function sellAll(keep=false){
+  const r=keep?reserved():{};let t=0;
+  CROPS.forEach(c=>t+=sellCrop(c.id,r[c.id]||0));return t;
+}
 
-// ---------- Render ----------
+// ---- misiones ----
+function activeStory(){return STORY.filter(q=>!S.qdone[q.id]&&(!q.after||S.qdone[q.after]))}
+function baseFor(g){return g.type==='harvest'?(S.stats[g.crop]||0):g.type==='earn'?S.stats.earned:0}
+function ensureBases(){activeStory().forEach(q=>{if(S.qbase[q.id]===undefined)S.qbase[q.id]=baseFor(q.g)})}
+function prog(g,base){ // -> [actual, necesario]
+  switch(g.type){
+    case'harvest':return[(S.stats[g.crop]||0)-base,g.n];
+    case'deliver':return[S.inv[g.crop]||0,g.n];
+    case'level':return[S.lvl,g.n];
+    case'plots':return[S.plots.length,g.n];
+    case'own':return[S.crops[g.crop]?1:0,1];
+    case'up':return[lv(g.id),g.n];
+    case'earn':return[S.stats.earned-base,g.n];
+  }
+}
+function goalText(g){
+  const c=g.crop?cropOf(g.crop):null;
+  return{harvest:`Cosecha ${g.n} ${c&&c.e}`,deliver:`Entrega ${g.n} ${c&&c.e}`,level:`Alcanza el nivel ${g.n}`,
+    plots:`Ten ${g.n} parcelas`,own:`Desbloquea ${c&&c.e} ${c&&c.n}`,up:`Mejora «${(UPS.find(u=>u.id===g.id)||{}).n}» al nivel ${g.n}`,
+    earn:`Gana ${fmt(g.n)} 🪙 vendiendo`}[g.type];
+}
+function giveReward(r,mult=1){
+  if(r.coins)S.coins+=r.coins*mult;
+  if(r.xp)addXP(r.xp*mult);
+  if(r.pts)S.pts+=r.pts*mult;
+  if(r.stars)S.stars+=r.stars*mult;
+  toast('🎁 '+[r.coins&&'+'+fmt(r.coins*mult)+'🪙',r.xp&&'+'+fmt(r.xp*mult)+' XP',r.pts&&'+'+r.pts*mult+' pts',r.stars&&'+'+r.stars*mult+'⭐'].filter(Boolean).join(' '));
+}
+function genDaily(){
+  const today=new Date().toISOString().slice(0,10);if(S.daily.day===today)return;
+  const owned=CROPS.filter(c=>S.crops[c.id]),list=[],pick=()=>owned[Math.floor(Math.random()*owned.length)];
+  for(let i=0;i<3;i++){
+    const t=['harvest','deliver','earn'][i],c=pick();
+    if(t==='earn'){const n=Math.round(200*Math.pow(S.lvl,1.7)/10)*10;
+      list.push({type:'earn',n,base:S.stats.earned,r:{coins:Math.round(n*0.3),xp:20+10*S.lvl}})}
+    else{const n=Math.max(4,Math.round((t==='harvest'?90:70)/c.time));
+      list.push({type:t,crop:c.id,n,base:S.stats[c.id]||0,r:{coins:Math.round(c.gain*n*0.8),xp:20+10*S.lvl}})}
+  }
+  S.daily={day:today,list};
+}
+function claimable(){ensureBases();
+  return activeStory().filter(q=>{const[a,n]=prog(q.g,S.qbase[q.id]);return a>=n}).length+
+    S.daily.list.filter(d=>!d.done&&(p=>p[0]>=p[1])(prog(d,d.base))).length;
+}
+function finishQuest(g,base,mark,reward,mult){
+  const[a,n]=prog(g,base);if(a<n)return false;
+  if(g.type==='deliver')S.inv[g.crop]-=g.n;
+  mark();giveReward(reward,mult);return true;
+}
+
+// ================= ACCIONES =================
+const A={
+  tab(t){tab=t},
+  plot(i){const p=S.plots[i],c=cropOf(p.c);
+    if(i<autoCount())return;
+    if(p.t>=c.time/speed()){harvestUnits(p.c);p.c=S.sel;p.t=0.0001}
+    else if(p.t===0){p.c=S.sel;p.t=0.0001}},
+  plotbuy(){if(S.plots.length>=MAX_PLOTS)return;const c=PLOT_COST(S.plots.length);
+    if(S.coins<c)return;S.coins-=c;S.plots.push({c:S.sel,t:0})},
+  crop(id){const c=cropOf(id);
+    if(S.crops[id]){S.sel=id;toast('Sembrando '+c.n+' en las próximas cosechas');return}
+    if(S.lvl<c.lv)return toast('Requiere nivel '+c.lv);
+    if(S.coins<c.cost)return;S.coins-=c.cost;S.crops[id]=1;S.sel=id;toast('¡Desbloqueaste '+c.n+'!')},
+  up(id){const u=UPS.find(x=>x.id===id);if(u.max&&lv(id)>=u.max)return;const c=upCost(u);
+    if(S.coins<c)return;S.coins-=c;S.ups[id]=lv(id)+1},
+  sell(id){const v=sellCrop(id);if(v)toast('+'+fmt(v)+' 🪙')},
+  sellall(){const v=sellAll();if(v)toast('Vendido: +'+fmt(v)+' 🪙')},
+  claim(id,x){const q=STORY.find(s=>s.id===id);
+    finishQuest(q.g,S.qbase[id],()=>S.qdone[id]=1,q.r,x?2:1)},
+  dclaim(i,x){const d=S.daily.list[i];
+    finishQuest(d,d.base,()=>d.done=1,d.r,x?2:1)},
+  claimad(id){watchAd(()=>A.claim(id,1))},
+  dclaimad(i){watchAd(()=>A.dclaim(i,1))},
+  skill(id){const s=SKILLS.find(x=>x.id===id);if(S.pts<1||sk(id)>=s.max)return;S.pts--;S.skills[id]=sk(id)+1},
+  ad(){watchAd(()=>{S.bonusUntil=Math.max(Date.now(),S.bonusUntil)+120000;toast('x2 ganancias por 2 min')})},
+  prest(){const g=prestigeGain();if(g<1)return toast('Necesitas más ventas');
+    if(!confirm('Reiniciar granja para ganar '+g+' ⭐ (+10% precios cada una)? Conservas nivel, habilidades y misiones.'))return;
+    const keep={stats:S.stats,xp:S.xp,lvl:S.lvl,pts:S.pts,skills:S.skills,qdone:S.qdone,qbase:S.qbase,daily:S.daily,stars:S.stars+g};
+    S=Object.assign(fresh(),keep);save()},
+};
+function prestigeGain(){return Math.floor(Math.sqrt(S.runEarned/5000))}
+function watchAd(cb){
+  // TODO: reemplazar por SDK real de anuncios recompensados (AdMob / Unity Ads / AdSense H5)
+  toast('📺 Anuncio simulado...');cb();
+}
+
+// ================= UI =================
+let tab='farm',pointerDown=false;
 const $=id=>document.getElementById(id);
-function render(){
+const btn=(txt,a,arg,dis,cls)=>`<button ${cls?`class="${cls}"`:''} data-a="${a}" ${arg!==undefined?`data-x="${arg}"`:''} ${dis?'disabled':''}>${txt}</button>`;
+function pbar(a,n){return`<div class="bar"><i style="width:${Math.min(100,a/n*100)}%"></i></div>`}
+
+function vFarm(){
+  let h='<div class="grid">';
+  S.plots.forEach((p,i)=>{const c=cropOf(p.c),need=c.time/speed(),ready=p.t>=need;
+    h+=`<div class="plot${ready?' ready':''}" data-a="plot" data-x="${i}"><div class="emo">${ready?c.e:p.t>0?'🌱':'🟫'}</div>
+      <div class="sub">${c.n}${i<autoCount()?' 🤖':''}</div><div class="bar"><i data-b="${i}" style="width:${Math.min(100,p.t/need*100)}%"></i></div></div>`});
+  if(S.plots.length<MAX_PLOTS)h+=`<div class="plot locked" data-a="plotbuy"><div class="emo">➕</div><div class="sub">Parcela<br>🪙 ${fmt(PLOT_COST(S.plots.length))}</div></div>`;
+  h+='</div><h2>Cultivos (toca para sembrar)</h2>';
+  CROPS.forEach(c=>{const own=S.crops[c.id],ok=S.lvl>=c.lv;
+    h+=`<div class="row"><div><b>${c.e} ${c.n} ${S.sel===c.id?'✅':''}</b><span class="sub">🪙${c.gain} · ${c.time}s · Nv ${c.lv}</span></div>
+      ${own?btn(S.sel===c.id?'Activo':'Sembrar','crop',c.id,S.sel===c.id):btn(ok?'🪙 '+fmt(c.cost):'🔒 Nv '+c.lv,'crop',c.id,!ok||S.coins<c.cost)}</div>`});
+  h+='<h2>Mejoras</h2>';
+  UPS.forEach(u=>{const m=u.max&&lv(u.id)>=u.max;
+    h+=`<div class="row"><div><b>${u.n} (nv ${lv(u.id)})</b><span class="sub">${u.d}</span></div>${btn(m?'MAX':'🪙 '+fmt(upCost(u)),'up',u.id,m||S.coins<upCost(u))}</div>`});
+  return h;
+}
+function vQuests(){
+  ensureBases();let h='<h2>📅 Misiones diarias</h2>';
+  S.daily.list.forEach((d,i)=>{const[a,n]=prog(d,d.base),ok=a>=n,c=d.crop&&cropOf(d.crop);
+    h+=`<div class="q${d.done?' done':''}"><b>${goalText(d)}</b>${pbar(a,n)}<div class="sub">${fmt(Math.min(a,n))}/${fmt(n)} · 🪙${fmt(d.r.coins)} · ${fmt(d.r.xp)} XP</div>
+      ${d.done?'<div class="sub">✔ Completada</div>':`<div class="btns">${btn('Reclamar','dclaim',i,!ok)}${btn('📺 x2','dclaimad',i,!ok,'alt')}</div>`}</div>`});
+  h+='<h2>📜 Historia</h2>';
+  const act=activeStory();
+  if(!act.length)h+='<div class="q"><b>🏆 ¡Completaste la historia!</b><div class="sub">Pronto habrá más capítulos.</div></div>';
+  act.slice(0,3).forEach(q=>{const[a,n]=prog(q.g,S.qbase[q.id]),ok=a>=n,r=q.r;
+    h+=`<div class="q"><div class="head"><span class="npc">${NPC[q.npc].e}</span><div><b>${q.t}</b><div class="sub">${NPC[q.npc].n}</div></div></div>
+      <div class="txt">“${q.txt}”</div><b>${goalText(q.g)}</b>${pbar(a,n)}
+      <div class="sub">${fmt(Math.min(a,n))}/${fmt(n)} · ${[r.coins&&'🪙'+fmt(r.coins),r.xp&&fmt(r.xp)+' XP',r.pts&&r.pts+' pts',r.stars&&r.stars+'⭐'].filter(Boolean).join(' · ')}</div>
+      <div class="btns">${btn('Reclamar','claim',q.id,!ok)}${btn('📺 x2','claimad',q.id,!ok,'alt')}</div></div>`});
+  const done=STORY.filter(q=>S.qdone[q.id]).length;
+  return h+`<div class="sub">Historia: ${done}/${STORY.length}</div>`;
+}
+function vHero(){
+  let h=`<div class="q"><div class="head"><span class="npc">🧑‍🌾</span><div><b>Nivel ${S.lvl}</b><div class="sub">XP ${fmt(S.xp)}/${fmt(needXp(S.lvl))} · ⭐ ${S.stars} (+${S.stars*10}% precios)</div></div></div></div>
+    <h2>Habilidades · ${S.pts} pts</h2>`;
+  SKILLS.forEach(s=>{const m=sk(s.id)>=s.max;
+    h+=`<div class="row"><div><b>${s.n} (${sk(s.id)}/${s.max})</b><span class="sub">${s.d}</span></div>${btn(m?'MAX':'+1','skill',s.id,m||S.pts<1)}</div>`});
+  const g=prestigeGain();
+  h+=`<h2>🏆 Prestigio</h2><div class="row"><div><b>Nueva temporada</b><span class="sub">Ganarías ${g} ⭐ · conservas nivel, habilidades y misiones</span></div>${btn('Reiniciar','prest',undefined,g<1)}</div>`;
+  return h;
+}
+function vMarket(){
+  let h='<h2>🎒 Inventario</h2>',any=false;
+  const price=priceMult();
+  CROPS.forEach(c=>{const n=Math.floor(S.inv[c.id]||0);if(!n)return;any=true;
+    h+=`<div class="row"><div><b>${c.e} ${c.n} ×${fmt(n)}</b><span class="sub">🪙${(c.gain*price).toFixed(1)} c/u</span></div>${btn('Vender','sell',c.id)}</div>`});
+  if(!any)h+='<div class="sub">Vacío. Cosecha para llenar el inventario.</div>';
+  else h+=btn('Vender todo','sellall');
+  h+=`<h2>Extras</h2><div class="row"><div><b>📺 Bono x2 (2 min)</b><span class="sub">Duplica precios${bonus()>1?' · activo':''}</span></div>${btn('Ver','ad',undefined,false,'alt')}</div>`;
+  return h;
+}
+const TABS=[['farm','🌾','Granja',vFarm],['quests','📜','Misiones',vQuests],['hero','🧑‍🌾','Héroe',vHero],['market','🏪','Mercado',vMarket]];
+
+function render(force){
+  if(pointerDown&&!force)return;
+  genDaily();
   $('coins').textContent='🪙 '+fmt(S.coins);
-  $('rate').textContent=fmt(perSec())+'/s · ⭐'+S.stars+(bonus()>1?' · x2 activo':'');
-  const pl=$('plots');pl.innerHTML='';
-  S.plots.forEach((p,i)=>{const c=cropOf(p.c),need=c.time/speed(),d=document.createElement('div');
-    const ready=p.t>=need;d.className='plot'+(ready?' ready':'');
-    d.innerHTML=`<div class="emo">${ready?c.e:p.t>0?'🌱':'🟫'}</div><div class="sub">${c.n}</div><div class="bar"><i style="width:${Math.min(100,p.t/need*100)}%"></i></div>`;
-    d.onclick=()=>tapPlot(i);pl.appendChild(d)});
-  if(S.plots.length<MAX_PLOTS){const c=PLOT_COST(S.plots.length),d=document.createElement('div');
-    d.className='plot locked';d.innerHTML=`<div class="emo">➕</div><div class="sub">Parcela<br>🪙 ${fmt(c)}</div>`;d.onclick=buyPlot;pl.appendChild(d)}
-  $('crops').innerHTML='';
-  CROPS.forEach(c=>{const own=S.crops[c.id],r=document.createElement('div');r.className='row';
-    r.innerHTML=`<div><b>${c.e} ${c.n}</b><span class="sub">🪙${c.gain} / ${c.time}s</span></div>`;
-    const b=document.createElement('button');b.textContent=own?'✔':'🪙 '+fmt(c.cost);b.disabled=own||S.coins<c.cost;b.onclick=()=>buyCrop(c.id);
-    r.appendChild(b);$('crops').appendChild(r)});
-  $('ups').innerHTML='';
-  UPS.forEach(u=>{const r=document.createElement('div');r.className='row';const maxed=u.max&&lvl(u.id)>=u.max;
-    r.innerHTML=`<div><b>${u.n} (nv ${lvl(u.id)})</b><span class="sub">${u.d}</span></div>`;
-    const b=document.createElement('button');b.textContent=maxed?'MAX':'🪙 '+fmt(upCost(u));b.disabled=maxed||S.coins<upCost(u);b.onclick=()=>buyUp(u.id);
-    r.appendChild(b);$('ups').appendChild(r)});
-  const g=prestigeGain();$('presInfo').textContent='Ganarías '+g+' ⭐ (+10% c/u)';$('presBtn').disabled=g<1;
+  $('rate').textContent=fmt(perSec())+'/s'+(bonus()>1?' · x2 activo':'');
+  $('lvl').textContent='Nivel '+S.lvl+(S.pts?' · '+S.pts+' pts 🔔':'');
+  $('xpfill').style.width=(S.xp/needXp(S.lvl)*100)+'%';
+  $('main').innerHTML=TABS.find(t=>t[0]===tab)[3]();
+  const cl=claimable();
+  $('nav').innerHTML=TABS.map(t=>`<div class="${tab===t[0]?'on':''}" data-a="tab" data-x="${t[0]}"><span>${t[1]}</span>${t[2]}${t[0]==='quests'&&cl?`<b class="badge">${cl}</b>`:''}${t[0]==='hero'&&S.pts?`<b class="badge">${S.pts}</b>`:''}</div>`).join('');
 }
-function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),2200)}
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),2400)}
 
-// ---------- Bucle ----------
+// ================= BUCLE =================
 function tick(dt){
-  S.plots.forEach((p,i)=>{const c=cropOf(p.c),need=c.time/speed();
+  const ac=autoCount();
+  S.plots.forEach((p,i)=>{const auto=i<ac;let c=cropOf(p.c),need=c.time/speed();
+    if(auto&&p.t===0)p.t=0.0001;
     if(p.t>0){p.t+=dt;
-      if(i<autoCount()){while(p.t>=need){harvest({...p});p.t-=need}}
-      else if(p.t>need)p.t=need}
-    else if(i<autoCount())p.t=0.0001});
+      if(auto){while(p.t>=need){harvestUnits(p.c);p.c=S.sel;p.t-=need;need=cropOf(p.c).time/speed()}}
+      else if(p.t>need)p.t=need}});
 }
-// Progreso offline (máx 8 h, al 50%)
-(function offline(){const away=Math.min((Date.now()-S.last)/1000,8*3600);
-  if(away>30){const g=perSec()*away*0.5;if(g>0){S.coins+=g;setTimeout(()=>toast('Mientras no estabas: +'+fmt(g)+' 🪙'),400)}}})();
+let cartT=0;
+(function offline(){
+  const away=Math.min((Date.now()-S.last)/1000,8*3600);if(away<30)return;
+  const eff=0.5+0.1*sk('off');let coins0=S.coins,got=0;
+  for(let i=0;i<autoCount();i++){const c=cropOf(S.plots[i].c),u=away*eff*speed()/c.time;harvestUnits(c.id,u);got+=u*qty()}
+  if(sk('cart'))sellAll(true);
+  if(got>0)setTimeout(()=>toast('🌙 Mientras no estabas: +'+fmt(got)+' cosechas'+(S.coins>coins0?' (+'+fmt(S.coins-coins0)+' 🪙)':'')),400);
+})();
 
+document.addEventListener('pointerdown',()=>pointerDown=true);
+['pointerup','pointercancel'].forEach(e=>document.addEventListener(e,()=>setTimeout(()=>pointerDown=false,60)));
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-a]');if(!el||el.disabled)return;
+  const a=el.dataset.a,x=el.dataset.x;A[a](isNaN(x)||x===''||x===undefined?x:+x);render(true);save();
+});
 let prev=performance.now(),acc=0;
-setInterval(()=>{const n=performance.now(),dt=(n-prev)/1000;prev=n;tick(dt);acc+=dt;
-  updateBars();if(acc>=1){acc=0;render();save()}},100);
-function updateBars(){const bars=document.querySelectorAll('.plot .bar i');
-  S.plots.forEach((p,i)=>{const need=cropOf(p.c).time/speed();if(bars[i])bars[i].style.width=Math.min(100,p.t/need*100)+'%'})}
-$('adBtn').onclick=watchAd;$('presBtn').onclick=prestige;
+setInterval(()=>{
+  const n=performance.now(),dt=(n-prev)/1000;prev=n;tick(dt);acc+=dt;cartT+=dt;
+  if(sk('cart')&&cartT>=30){cartT=0;sellAll(true)}
+  if(tab==='farm')S.plots.forEach((p,i)=>{const b=document.querySelector(`[data-b="${i}"]`);if(b)b.style.width=Math.min(100,p.t/(cropOf(p.c).time/speed())*100)+'%'});
+  if(acc>=1){acc=0;render();save()}
+},100);
 window.addEventListener('beforeunload',save);
-render();
+render(true);
 </script>
 </body>
 </html>
