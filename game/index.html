@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Granja Idle</title>
+<style>
+:root{--bg:#1f3a2a;--card:#2d5239;--acc:#f2c94c;--txt:#f4f1de;--dim:#a9c4b0}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;max-width:480px;margin:auto;padding:12px}
+h1{font-size:20px;margin:0}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.coins{font-size:22px;color:var(--acc);font-weight:700}
+.sub{font-size:12px;color:var(--dim)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.plot{background:var(--card);border-radius:10px;padding:8px;text-align:center;min-height:96px;cursor:pointer;position:relative;user-select:none}
+.plot.locked{opacity:.6}
+.plot .emo{font-size:30px}
+.bar{height:6px;background:#0004;border-radius:3px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--acc);width:0}
+.plot.ready{outline:2px solid var(--acc)}
+h2{font-size:14px;margin:12px 0 6px;color:var(--dim);text-transform:uppercase}
+.row{display:flex;justify-content:space-between;align-items:center;background:var(--card);border-radius:10px;padding:10px;margin-bottom:6px;gap:8px}
+.row b{display:block}
+button{background:var(--acc);color:#222;border:0;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer}
+button:disabled{background:#556;color:#999;cursor:not-allowed}
+button.alt{background:#5b8def;color:#fff}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#000c;padding:10px 16px;border-radius:20px;opacity:0;transition:.3s;pointer-events:none}
+.toast.on{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>🌾 Granja Idle</h1><div class="sub" id="rate"></div></div>
+  <div class="coins" id="coins">0</div>
+</header>
+
+<div class="grid" id="plots"></div>
+
+<h2>Cultivos</h2><div id="crops"></div>
+<h2>Mejoras</h2><div id="ups"></div>
+<h2>Extras</h2>
+<div class="row">
+  <div><b>📺 Bono x2 (2 min)</b><span class="sub">Mira un anuncio (simulado)</span></div>
+  <button class="alt" id="adBtn">Ver</button>
+</div>
+<div class="row">
+  <div><b>🏆 Prestigio</b><span class="sub" id="presInfo"></span></div>
+  <button id="presBtn">Reiniciar</button>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- Datos ----------
+const CROPS=[
+  {id:'trigo',  n:'Trigo',   e:'🌾',time:3,  gain:5,   cost:0},
+  {id:'zanah',  n:'Zanahoria',e:'🥕',time:6,  gain:14,  cost:150},
+  {id:'maiz',   n:'Maíz',    e:'🌽',time:12, gain:36,  cost:1200},
+  {id:'tomate', n:'Tomate',  e:'🍅',time:25, gain:100, cost:9000},
+  {id:'calab',  n:'Calabaza',e:'🎃',time:60, gain:320, cost:70000},
+];
+const UPS=[
+  {id:'speed', n:'Riego automático', d:'+15% velocidad',   base:100, mult:1.6},
+  {id:'yield', n:'Fertilizante',     d:'+20% ganancia',    base:150, mult:1.7},
+  {id:'auto',  n:'Granjero',         d:'Cosecha y replanta solo (nivel = % de plots)', base:400, mult:2.2, max:5},
+];
+const PLOT_COST=n=>Math.floor(250*Math.pow(2.4,n-3));
+const MAX_PLOTS=9;
+const SAVE='granjaIdle.v1';
+
+// ---------- Estado ----------
+const fresh=()=>({coins:0,crops:{trigo:1},ups:{},plots:[{c:'trigo',t:0},{c:'trigo',t:0},{c:'trigo',t:0}],
+  stars:0,bonusUntil:0,last:Date.now()});
+let S=load();
+function load(){try{const s=JSON.parse(localStorage.getItem(SAVE));if(s)return Object.assign(fresh(),s)}catch(e){}return fresh()}
+function save(){S.last=Date.now();try{localStorage.setItem(SAVE,JSON.stringify(S))}catch(e){}}
+
+// ---------- Cálculos ----------
+const lvl=id=>S.ups[id]||0;
+const starMult=()=>1+S.stars*0.1;
+const bonus=()=>Date.now()<S.bonusUntil?2:1;
+const speed=()=>Math.pow(1.15,lvl('speed'));
+const yieldM=()=>Math.pow(1.2,lvl('yield'))*starMult()*bonus();
+const upCost=u=>Math.floor(u.base*Math.pow(u.mult,lvl(u.id)));
+const cropOf=id=>CROPS.find(c=>c.id===id);
+function autoCount(){return Math.min(S.plots.length,Math.ceil(S.plots.length*lvl('auto')/5))}
+function perSec(){let t=0;S.plots.forEach((p,i)=>{if(i<autoCount()){const c=cropOf(p.c);t+=c.gain*yieldM()/(c.time/speed())}});return t}
+const fmt=n=>n>=1e9?(n/1e9).toFixed(2)+'B':n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e4?(n/1e3).toFixed(1)+'K':Math.floor(n).toString();
+
+// ---------- Acciones ----------
+function harvest(p){const c=cropOf(p.c);S.coins+=c.gain*yieldM();p.t=0}
+function tapPlot(i){
+  const p=S.plots[i];if(!p)return;
+  const c=cropOf(p.c);
+  if(p.t>=c.time/speed()&&i>=autoCount())harvest(p);
+  else if(p.t===0){p.t=0.0001}
+  render();
+}
+function buyCrop(id){const c=cropOf(id);if(S.coins<c.cost||S.crops[id])return;S.coins-=c.cost;S.crops[id]=1;
+  S.plots.forEach(p=>{if(cropOf(p.c).gain<c.gain)p.c=id});toast('¡Desbloqueaste '+c.n+'!');render()}
+function buyUp(id){const u=UPS.find(x=>x.id===id);if(u.max&&lvl(id)>=u.max)return;const c=upCost(u);
+  if(S.coins<c)return;S.coins-=c;S.ups[id]=lvl(id)+1;render()}
+function buyPlot(){if(S.plots.length>=MAX_PLOTS)return;const c=PLOT_COST(S.plots.length);
+  if(S.coins<c)return;S.coins-=c;const best=CROPS.filter(x=>S.crops[x.id]).pop();S.plots.push({c:best.id,t:0});render()}
+function prestigeGain(){return Math.floor(Math.sqrt(S.coins/5000))}
+function prestige(){const g=prestigeGain();if(g<1)return toast('Necesitas ≥ 5.000 monedas');
+  if(!confirm('Reiniciar para ganar '+g+' ⭐ (+10% ganancia cada una)?'))return;
+  const stars=S.stars+g;S=fresh();S.stars=stars;save();render()}
+function watchAd(){
+  // TODO: reemplazar por SDK real (AdMob / Unity Ads / AdSense H5) con anuncio recompensado
+  toast('📺 Anuncio simulado... ¡x2 activado 2 min!');
+  S.bonusUntil=Math.max(Date.now(),S.bonusUntil)+120000;render()}
+
+// ---------- Render ----------
+const $=id=>document.getElementById(id);
+function render(){
+  $('coins').textContent='🪙 '+fmt(S.coins);
+  $('rate').textContent=fmt(perSec())+'/s · ⭐'+S.stars+(bonus()>1?' · x2 activo':'');
+  const pl=$('plots');pl.innerHTML='';
+  S.plots.forEach((p,i)=>{const c=cropOf(p.c),need=c.time/speed(),d=document.createElement('div');
+    const ready=p.t>=need;d.className='plot'+(ready?' ready':'');
+    d.innerHTML=`<div class="emo">${ready?c.e:p.t>0?'🌱':'🟫'}</div><div class="sub">${c.n}</div><div class="bar"><i style="width:${Math.min(100,p.t/need*100)}%"></i></div>`;
+    d.onclick=()=>tapPlot(i);pl.appendChild(d)});
+  if(S.plots.length<MAX_PLOTS){const c=PLOT_COST(S.plots.length),d=document.createElement('div');
+    d.className='plot locked';d.innerHTML=`<div class="emo">➕</div><div class="sub">Parcela<br>🪙 ${fmt(c)}</div>`;d.onclick=buyPlot;pl.appendChild(d)}
+  $('crops').innerHTML='';
+  CROPS.forEach(c=>{const own=S.crops[c.id],r=document.createElement('div');r.className='row';
+    r.innerHTML=`<div><b>${c.e} ${c.n}</b><span class="sub">🪙${c.gain} / ${c.time}s</span></div>`;
+    const b=document.createElement('button');b.textContent=own?'✔':'🪙 '+fmt(c.cost);b.disabled=own||S.coins<c.cost;b.onclick=()=>buyCrop(c.id);
+    r.appendChild(b);$('crops').appendChild(r)});
+  $('ups').innerHTML='';
+  UPS.forEach(u=>{const r=document.createElement('div');r.className='row';const maxed=u.max&&lvl(u.id)>=u.max;
+    r.innerHTML=`<div><b>${u.n} (nv ${lvl(u.id)})</b><span class="sub">${u.d}</span></div>`;
+    const b=document.createElement('button');b.textContent=maxed?'MAX':'🪙 '+fmt(upCost(u));b.disabled=maxed||S.coins<upCost(u);b.onclick=()=>buyUp(u.id);
+    r.appendChild(b);$('ups').appendChild(r)});
+  const g=prestigeGain();$('presInfo').textContent='Ganarías '+g+' ⭐ (+10% c/u)';$('presBtn').disabled=g<1;
+}
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),2200)}
+
+// ---------- Bucle ----------
+function tick(dt){
+  S.plots.forEach((p,i)=>{const c=cropOf(p.c),need=c.time/speed();
+    if(p.t>0){p.t+=dt;
+      if(i<autoCount()){while(p.t>=need){harvest({...p});p.t-=need}}
+      else if(p.t>need)p.t=need}
+    else if(i<autoCount())p.t=0.0001});
+}
+// Progreso offline (máx 8 h, al 50%)
+(function offline(){const away=Math.min((Date.now()-S.last)/1000,8*3600);
+  if(away>30){const g=perSec()*away*0.5;if(g>0){S.coins+=g;setTimeout(()=>toast('Mientras no estabas: +'+fmt(g)+' 🪙'),400)}}})();
+
+let prev=performance.now(),acc=0;
+setInterval(()=>{const n=performance.now(),dt=(n-prev)/1000;prev=n;tick(dt);acc+=dt;
+  updateBars();if(acc>=1){acc=0;render();save()}},100);
+function updateBars(){const bars=document.querySelectorAll('.plot .bar i');
+  S.plots.forEach((p,i)=>{const need=cropOf(p.c).time/speed();if(bars[i])bars[i].style.width=Math.min(100,p.t/need*100)+'%'})}
+$('adBtn').onclick=watchAd;$('presBtn').onclick=prestige;
+window.addEventListener('beforeunload',save);
+render();
+</script>
+</body>
+</html>
